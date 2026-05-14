@@ -1,47 +1,120 @@
 <!DOCTYPE html>
 <html>
-  <head>
+<head>
     <meta charset="utf-8"/>
     <title>Tundeboids!</title>
     <link rel="icon" href="/favicon.png" sizes="32x32">
     <script src="https://unpkg.com/tone"></script>
     <script src="./boids.js"></script>
     <style type="text/css">
-      body {
-        margin: 0;
-        background: #111;
-        color: #fff;
-        overflow: hidden;
-      }
+        body {
+          margin: 0.25rem;
+          background: #111;
+          color: #fff;
+          overflow: hidden;
+        }
+        .controls {
+          display: flex;
+          flex-wrap: wrap;
+          max-width: 100rem;
+        }
+        .tundeControlPanel {
+          display: grid;
+          grid-template-columns: auto auto auto;
+          padding: 0.1rem 1rem 0.1rem 1rem;
+          max-width: 50rem;
+        }
+        .tundeControlPanel div {
+          padding: 0.25rem;
+        }
+        .boidControlPanel {
+          display: grid;
+          grid-template-columns: auto auto;
+          padding: 0.1rem 1rem 0.1rem 1rem;
+          max-width: 50rem;
+        }
+        .boidControlPanel span {
+            padding: 0.25rem;
+        }
+        .boidControlPanel span input {
+            float: right;
+        }
     </style>
-  </head>
-  <body>
-    <button type="button" onclick="start()">Start!</button>
-    <button type="button" onclick="pause()">Pause!</button>
-    <select id="modepicker" onchange="modeToPreset(this.value)">
-      <option value="smooth">Smooth</option>
-      <option value="chromatic">Chromatic</option>
-      <option value="diatonic">Diatonic</option>
-      <option value="pentatonic" selected="selected">Pentatonic</option>
-      <option value="wholetone">Whole tone</option>
-      <option value="diminished">Diminished 7th chord</option>
-      <option value="augmented">Augmented chord</option>
-      <option value="major">Major chord</option>
-      <option value="minor">Minor chord</option>
-      <option value="custom">Use Custom Mode</option>
-    </select>
-    <input type="text" id="custommode" value="0, 3.5, 7" onchange="customModeChange(this.value)">
-    <button type="button" onclick="switchAxis();this.innerText='Y-axis: '+yAxis;">Y-axis: volume</button>
-    <div class="boidControlPanel">
-      Coherence
-      <input type="range" min="0" max="0.01" value="0.005" step="0.001" onchange="coherence = this.value"/>
-      Separation
-      <input type="range" min="0" max="0.1" value="0.05" step="0.01" onchange="separation = this.value"/>
-      Alignment
-      <input type="range" min="0" max="0.1" value="0.05" step="0.01" onchange="alignment = this.value"/>
-      Visual Range
-      <input type="range" min="0" max="200" value="50" onchange="visualRange = this.value"/>
+</head>
+<body>
+<div class="controls">
+    <div class="tundeControlPanel">
+        <div>
+            <button type="button" onclick="start()">Start!</button>
+            <button type="button" onclick="pause()">Pause!</button>
+            <div title="Uncheck for cronch (works best on duration mode)">
+                <input type="checkbox" id="anticlick"
+                       name="anticlick" checked
+                       onchange="setAnticlick(this.checked)"/>
+                <label for="anticlick">Anticlick</label>
+            </div>
+        </div>
+        <div>
+            <label for="modepicker">Note Selection:</label>
+            <select id="modepicker" onchange="modeToPreset(this.value)">
+                <option value="smooth">Smooth</option>
+                <option value="chromatic">Chromatic</option>
+                <option value="diatonic">Diatonic</option>
+                <option value="pentatonic" selected="selected">Pentatonic</option>
+                <option value="wholetone">Whole tone</option>
+                <option value="diminished">Diminished 7th chord</option>
+                <option value="augmented">Augmented chord</option>
+                <option value="major">Major chord</option>
+                <option value="minor">Minor chord</option>
+                <option value="custom">Use Custom Mode</option>
+            </select>
+            <br/>
+            <span id="custommode_control" title="Half steps from root, comma separated" hidden="true">
+            <label
+                    for="custommode">Custom mode:</label>
+            <input type="text" id="custommode" value="0, 3.5, 7"
+                   onchange="customModeChange(this.value)">
+        </span>
+        </div>
+        <div>
+            <label for="yAxis">Y-Axis:</label>
+            <select id="yAxis" onchange="switchAxis(this.value)">
+                <option value="0">Volume</option>
+                <option value="1">Duration</option>
+                <option value="2">Plucked Duration</option>
+            </select>
+            <br/>
+            <span id="subdiv_control" hidden="true">
+            <label for="subdivision">Subdivide by:</label>
+            <input type="text"
+                   id="subdivision"
+                   value="2" size="3"
+                   onchange="setSubdivision(this.value)"/>
+        </span>
+        </div>
     </div>
-    <canvas id="boids" width="150" height="150"></canvas>
-  </body>
+    <div class="boidControlPanel">
+      <span title="Tundeboids' tendency to move towards each other.">
+        <label for="coherence">Coherence</label>
+        <input id="coherence" type="range" min="0" max="0.01" value="0.005" step="0.001"
+               onchange="coherence = this.value"/>
+      </span>
+        <span title="Tundeboids' tendency to respect personal space.">
+        <label for="separation">Separation</label>
+        <input id="separation" type="range" min="0" max="0.1" value="0.05" step="0.01"
+               onchange="separation = this.value"/>
+      </span>
+        <span title="Tundeboids' tendency to fly in the same direction.">
+        <label for="alignment">Alignment</label>
+        <input id="alignment" type="range" min="0" max="0.1" value="0.05" step="0.01"
+               onchange="alignment = this.value"/>
+      </span>
+        <span title="How far each Tundeboid can see.">
+        <label for="visualrange">Visual Range</label>
+        <input id="visualrange" type="range" min="0" max="200" value="50" onchange="visualRange = this.value"/>
+      </span>
+    </div>
+</div>
+<canvas id="boids" width="150" height="150"></canvas>
+</body>
 </html>

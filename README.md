@@ -5,7 +5,7 @@ Based on Ben Eater's earlier boids code.
 This code is [MIT licensed](http://en.wikipedia.org/wiki/MIT_License).
 
 ## What is this?
-This is the classic boids algorithm, but with sound. Pitches are based on left-to-right location, 
+This is the classic boids algorithm, but with sound. Pitches are based on horizontal location and quantized by your chosen note selection, while vertical location influences either volume or duration, depending on your settings. 
 
 This simulation is running on [my website](https://mage.city/Tundeboids/) if you’d like to check it out.
 

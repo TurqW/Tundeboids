@@ -8,6 +8,8 @@ let coherence = 0.005; // 0 to .01
 let separation = 0.05; // 0 to .1
 let alignment = 0.05; // 0 to .1
 let visualRange = 50; // 0 to 200
+let anticlick = 0.01;
+let durationDivisions = 1.5;
 const speedLimit = 3;
 
 // Music variables
@@ -15,9 +17,11 @@ const minNote = -35;
 const maxNote = 24;
 const minVolume = -45;
 const maxVolume = -15;
-const minDuration = 0;
-const maxDuration = 5;
+const minDurationAbsolute = 0.065;
+const maxDurationAbsolute = 8;
+let maxSubdivisionPower = Math.floor(Math.log(maxDurationAbsolute/minDurationAbsolute)/Math.log(durationDivisions))
 const SHINE_CONSTANT = 15;
+const ANTICLICK_BUFFER = 0.01;
 
 // Interface variables
 const DARK_COLOR = "#063"
@@ -33,10 +37,18 @@ modes = {
   "augmented": [0, 4, 8],
   "major": [0, 4, 7],
   "minor": [0, 3, 7],
+  "just major": [0, 12*Math.log2(5/4), 12*Math.log2(3/2)],
+  "just minor": [0, 12*Math.log2(6/5), 12*Math.log2(3/2)]
 }
 
 let mode = modes["pentatonic"]
-let yAxis = "volume"
+
+yAxisTypes = ["volume", "duration", "pluck"]
+Y_VOLUME = 0
+Y_DURATION = 1
+Y_PLUCK = 2
+
+let yAxis = 0
 var boids = [];
 
 function mod(x, n) {
@@ -46,16 +58,28 @@ function mod(x, n) {
 function initBoids() {
   for (var i = 0; i < numBoids; i += 1) {
     boids[i] = {
+      id: i,
       x: Math.random() * width,
       y: Math.random() * height,
       dx: Math.random() * 10 - 5,
       dy: Math.random() * 10 - 5,
       history: [],
-      osc: new Tone.Oscillator(440, "sine1").toMaster()
+      osc: new Tone.Oscillator(440, "sine1"),
+      gain: new Tone.Gain(1).toDestination(),
+      shineTimer: 0
     };
     boids[i].osc.frequency.value = calculateFrequency(boids[i].x)
+    boids[i].osc.connect(boids[i].gain)
+    boids[i].gain.gain.value = 0
     boids[i].osc.volume.value = -20
+    boids[i].osc.start()
   }
+}
+
+function resetBoid(boid) {
+    boid.gain.gain.rampTo(0, anticlick)
+    boid.osc.volume.value = -20
+    boid.osc.frequency.value = calculateFrequency(boid.x)
 }
 
 function distance(boid1, boid2) {
@@ -249,26 +273,47 @@ function drawBoid(ctx, boid) {
 }
 
 function updateTone(boid) {
-  if (yAxis === "duration") {
-    if (boid.osc.state === "stopped") {
+  if (yAxis > 0) {
+    // TODO: more separation between notes?
+    if (boid.gain.gain.value <= 0.0001 || boid.osc.state === "stopped") {
       boid.osc.frequency.value = calculateFrequency(boid.x)
       duration = calculateDuration(boid.y)
-      boid.osc.volume.value = -20
-      boid.osc.start()
-      boid.osc.stop('+'+duration)
+      if (boid.osc.state === "stopped") {
+        boid.osc.start()
+      }
+      boid.gain.gain.rampTo(1, anticlick)
+      rampDownHelper(boid, duration)
       boid.shineTimer = SHINE_CONSTANT
     }
   } else {
-    if (boid.osc.state === "stopped") {
+    if (boid.gain.gain.value <= 0.0001) {
+      boid.gain.gain.rampTo(1, anticlick)
+    }
+    if (boid.osc.state === "stopped"){
       boid.osc.start()
     }
     newFrequency = calculateFrequency(boid.x)
-    if (newFrequency != boid.osc.frequency.value) {
+    if (Math.abs(newFrequency - boid.osc.frequency.value) >= 0.001) {
       boid.shineTimer = SHINE_CONSTANT
       boid.osc.frequency.value = newFrequency
     }
-    boid.osc.volume.value = calculateVolume(boid.y)
+    boid.osc.volume.rampTo(calculateVolume(boid.y), anticlick)
   }
+}
+
+function rampDownHelper(boid, duration) {
+    rampDuration = anticlick
+    rampStart = boid.gain.gain.now() + duration - anticlick
+
+    if (yAxis == Y_PLUCK) {
+        rampDuration = duration
+        rampStart = boid.gain.gain.now() + anticlick
+    }
+    if (anticlick == 0.0) {
+        boid.osc.stop('+'+duration)
+    } else {
+        boid.gain.gain.rampTo(0, rampDuration, rampStart)
+    }
 }
 
 // Main animation loop
@@ -329,13 +374,14 @@ function calculateVolume(x) {
 }
 
 function calculateDuration(x) {
-  return 4/(Math.pow(2, Math.round(x * (maxDuration - minDuration)/height + minDuration)));
+  return maxDurationAbsolute/Math.pow(durationDivisions, Math.round(x * maxSubdivisionPower/height));
 }
 
 async function start() {
   await Tone.start()
   if (boids.length > 0) {
-    boids.forEach(boid => boid.osc.stop())
+    boids.forEach(boid => boid.gain.gain.rampTo(0, anticlick))
+    boids.forEach(boid => boid.osc.start())
     window.cancelAnimationFrame(animId)
   }
   isPaused = false;
@@ -355,37 +401,47 @@ function pause() {
   if(isPaused) {
     return unpause()
   }
-  boids.forEach(boid => boid.osc.stop())
+  boids.forEach(boid => boid.gain.gain.rampTo(0, anticlick))
   window.cancelAnimationFrame(animId)
   isPaused = true
 }
 
 function unpause() {
-  if (yAxis === "volume") {
-    boids.forEach(boid => boid.osc.start())
-  }
   animId = window.requestAnimationFrame(animationLoop)
   isPaused = false
 }
 
-function switchAxis() {
-  if(yAxis === "volume") {
-    boids.forEach(boid => boid.osc.stop())
-    yAxis = "duration"
+function switchAxis(value) {
+  yAxis = value
+  boids.forEach(resetBoid)
+  if(yAxis == Y_VOLUME) {
+    document.getElementById('subdiv_control').hidden = true
   } else {
-    boids.forEach(boid => boid.osc.stop())
-    if (!isPaused) {
-      boids.forEach(boid => boid.osc.start())
-    }
-    yAxis = "volume"
+    document.getElementById('subdiv_control').hidden = false
   }
+}
+
+function setAnticlick(value) {
+    if (value) {
+        anticlick = ANTICLICK_BUFFER
+        boids.forEach(resetBoid)
+    } else {
+        anticlick = 0.0
+    }
+}
+
+function setSubdivision(value) {
+    durationDivisions = value
+    maxSubdivisionPower = Math.floor(Math.log(maxDurationAbsolute/minDurationAbsolute)/Math.log(durationDivisions))
 }
 
 function modeToPreset(preset) {
   if(preset === "custom") {
+    document.getElementById('custommode_control').hidden = false
     mode = document.getElementById('custommode').value.split(',').map(x => parseFloat(x, 10))
 
   } else {
+    document.getElementById('custommode_control').hidden = true
     mode = modes[preset]
   }
 }
